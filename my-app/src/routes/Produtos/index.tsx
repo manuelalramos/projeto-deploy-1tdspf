@@ -1,90 +1,68 @@
 import { useEffect, useState } from "react";
-import type { TipoProduto } from "../../types/types";
-import { Link, useNavigate } from "react-router";
+import { Link } from "react-router";
 import CardProduto from "../../components/CardProduto";
 import { FaEdit as Editar } from "react-icons/fa";
 import { MdDeleteForever as Excluir } from "react-icons/md";
+import { excluirProduto, listarProdutos } from "../../services/produtos";
+import type { TipoProduto } from "../../types/types";
 
 export default function Produtos() {
-  // Para alterar o título da página:
   document.title = "Produtos";
 
-  const navigate = useNavigate();
-
   const [produtos, setProdutos] = useState<TipoProduto[]>([]);
+  const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState("");
 
   useEffect(() => {
-    const carregaProdutos = async () => {
+    async function carregar() {
       try {
-        const response = await fetch("http://localhost:3001/produtos");
-
-        if (!response.ok) {
-          throw new Error(
-            `Erro na listagem dos produtos: ${response.status} - ${response.statusText}`,
-          );
-        }
-
-        const data: TipoProduto[] = await response.json();
-        setProdutos(data);
+        setCarregando(true);
+        setErro("");
+        setProdutos(await listarProdutos());
       } catch (error) {
-        console.error(error);
+        setErro(error instanceof Error ? error.message : "Erro inesperado");
+      } finally {
+        setCarregando(false);
       }
-    };
-
-    carregaProdutos();
+    }
+    carregar();
   }, []);
 
-  //Apresente a lista de produtos em CARDS utilizando PROPS...
-
-
-  const handleDelete = async (id: string) => {
+  async function handleDelete(id: string) {
+    if (!window.confirm("Deseja realmente excluir este produto?")) return;
     try {
-
-      const response = await fetch(`http://localhost:3001/produtos/${id}`, {
-        method: "DELETE"
-      });
-
-      //ERRO
-      if (!response.ok) {
-        throw new Error(
-          `Erro na exclusão do produto: ${response.status} - ${response.statusText}`,
-        );
-      }
-
-      //SUCESSO
-      alert("Produto exculído com sucesso!");
-      //REDIRECT
-      navigate("/");
-
+      await excluirProduto(id);
+      setProdutos((lista) => lista.filter((p) => p.id !== id));
+      alert("Produto excluído com sucesso!");
     } catch (error) {
-      console.error(error);
+      alert(error instanceof Error ? error.message : "Erro inesperado");
     }
   }
+
+  if (carregando) return <main><p>Carregando produtos...</p></main>;
+  if (erro) return <main><p role="alert">{erro}</p></main>;
 
   return (
     <main>
       <h2>Produtos</h2>
+      <p><Link to="/cadastrar-produto">Cadastrar produto</Link></p>
+
+      {produtos.length === 0 && <p>Nenhum produto cadastrado.</p>}
 
       <div style={{ display: "flex", gap: "16px", flexWrap: "wrap" }}>
         {produtos.map((produto) => (
-          <CardProduto key={produto.id} produto={produto} />
+          <CardProduto key={produto.id} produto={produto} onExcluir={handleDelete} />
         ))}
       </div>
 
       <div>
-        <table
-          border={1}
-          style={{
-            width: "100%",
-            borderCollapse: "collapse",
-            border: "1px solid black",
-          }}
-        >
+        <table border={1} style={{ width: "100%", borderCollapse: "collapse", border: "1px solid black" }}>
           <thead>
             <tr>
               <th>ID</th>
               <th>NOME</th>
               <th>PREÇO</th>
+              <th>ESTOQUE</th>
               <th>DESCRIÇÃO</th>
               <th>AVATAR</th>
               <th>AÇÕES</th>
@@ -95,21 +73,20 @@ export default function Produtos() {
               <tr key={produto.id}>
                 <td>{produto.id}</td>
                 <td>{produto.nome}</td>
-                <td>{produto.preco}</td>
+                <td>{produto.preco.toFixed(2)}</td>
+                <td>{produto.estoque}</td>
                 <td>{produto.descricao}</td>
+                <td>{produto.avatar && <img src={produto.avatar} alt={produto.nome} width={40} />}</td>
                 <td>
-                  <img src={produto.avatar} alt={produto.nome} width={40} />
-                </td>
-                <td>
-                  <Link to={`/editar-produtos/${produto.id}`}><Editar /></Link> /
-                  <Link to="#" onClick={() => handleDelete(produto.id)}><Excluir /></Link>
+                  <Link to={`/editar-produtos/${produto.id}`} aria-label="Editar"><Editar /></Link> /{" "}
+                  <button type="button" aria-label="Excluir" onClick={() => handleDelete(produto.id)}><Excluir /></button>
                 </td>
               </tr>
             ))}
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={6}>Quantidade de registros : {produtos.length}</td>
+              <td colSpan={7}>Quantidade de registros : {produtos.length}</td>
             </tr>
           </tfoot>
         </table>
